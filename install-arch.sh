@@ -1,29 +1,28 @@
 #!/bin/bash
 set -e
 
-# Перемінні
+
 DISK="/dev/nvme0n1"
 CRYPT_NAME="cryptroot"
 HOSTNAME="archbook"
 USERNAME="anon"
-PASSWORD="anon"    # Можеш змінити пароль для юзера тут
+PASSWORD="anon"   
 LOCALE="en_US.UTF-8"
 TIMEZONE="Europe/Kyiv"
 
-# Очистка диска
+
 sgdisk --zap-all $DISK
 sgdisk -n1:0:+512M -t1:ef00 -c1:EFI $DISK
 sgdisk -n2:0:0     -t2:8300 -c2:ROOT $DISK
 
-# Шифрування
+
 cryptsetup luksFormat ${DISK}p2
 cryptsetup open ${DISK}p2 $CRYPT_NAME
 
-# Файлова система
 mkfs.fat -F32 ${DISK}p1
 mkfs.btrfs /dev/mapper/$CRYPT_NAME
 
-# Підтоми BTRFS
+
 mount /dev/mapper/$CRYPT_NAME /mnt
 btrfs subvolume create /mnt/@
 btrfs subvolume create /mnt/@home
@@ -32,7 +31,7 @@ btrfs subvolume create /mnt/@log
 btrfs subvolume create /mnt/@cache
 umount /mnt
 
-# Монтування
+
 mount -o noatime,compress=zstd,subvol=@ /dev/mapper/$CRYPT_NAME /mnt
 mkdir -p /mnt/{boot/efi,home,.snapshots,var/log,var/cache}
 mount -o noatime,compress=zstd,subvol=@home /dev/mapper/$CRYPT_NAME /mnt/home
@@ -41,16 +40,16 @@ mount -o noatime,compress=zstd,subvol=@log /dev/mapper/$CRYPT_NAME /mnt/var/log
 mount -o noatime,compress=zstd,subvol=@cache /dev/mapper/$CRYPT_NAME /mnt/var/cache
 mount ${DISK}p1 /mnt/boot/efi
 
-# Базова система
+
 pacstrap -K /mnt base linux linux-firmware btrfs-progs sudo nano vim networkmanager grub efibootmgr zsh \
           hyprland wayland xorg xdg-desktop-portal-hyprland mesa wl-clipboard foot \
           network-manager-applet thunar pavucontrol xdg-utils xdg-user-dirs noto-fonts ttf-dejavu \
           lightdm lightdm-gtk-greeter rofi dunst kitty neofetch
 
-# Генерація fstab
+
 genfstab -U /mnt >> /mnt/etc/fstab
 
-# Налаштування в chroot
+
 arch-chroot /mnt /bin/bash <<EOF
 
 # Час і локаль
@@ -92,4 +91,4 @@ EOF
 # Готово
 umount -R /mnt
 cryptsetup close $CRYPT_NAME
-echo "✅ Встановлення завершено. Перезавантажтесь."
+echo "✅ Installing ends. Reboot."

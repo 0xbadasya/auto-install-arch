@@ -8,16 +8,22 @@ PASSWORD="anon"
 LOCALE="en_US.UTF-8"
 TIMEZONE="Europe/Kyiv"
 
+# 💣 Повне очищення диска
+swapoff -a 2>/dev/null || true
+umount -R /mnt 2>/dev/null || true
+wipefs -af $DISK
+sgdisk --zap-all --clear --mbrtogpt --force $DISK
+partprobe $DISK
 
-sgdisk --zap-all $DISK
+# 💾 Розмітка
 sgdisk -n1:0:+512M -t1:ef00 -c1:EFI $DISK
 sgdisk -n2:0:0     -t2:8300 -c2:ROOT $DISK
 
+# 🔧 Форматування
+mkfs.fat -F32 -n EFI ${DISK}p1
+mkfs.btrfs -f ${DISK}p2
 
-mkfs.fat -F32 ${DISK}p1
-mkfs.btrfs ${DISK}p2
-
-
+# 📁 Підтоми
 mount ${DISK}p2 /mnt
 btrfs subvolume create /mnt/@
 btrfs subvolume create /mnt/@home
@@ -26,7 +32,7 @@ btrfs subvolume create /mnt/@log
 btrfs subvolume create /mnt/@cache
 umount /mnt
 
-
+# 📦 Монтування
 mount -o noatime,compress=zstd,subvol=@ ${DISK}p2 /mnt
 mkdir -p /mnt/{boot/efi,home,.snapshots,var/log,var/cache}
 mount -o noatime,compress=zstd,subvol=@home ${DISK}p2 /mnt/home
@@ -35,7 +41,7 @@ mount -o noatime,compress=zstd,subvol=@log ${DISK}p2 /mnt/var/log
 mount -o noatime,compress=zstd,subvol=@cache ${DISK}p2 /mnt/var/cache
 mount ${DISK}p1 /mnt/boot/efi
 
-
+# 📥 Установка базової системи
 pacstrap -K /mnt base linux linux-firmware btrfs-progs sudo nano vim networkmanager grub efibootmgr zsh \
          hyprland wayland xorg xdg-desktop-portal-hyprland mesa wl-clipboard foot \
          network-manager-applet thunar pavucontrol xdg-utils xdg-user-dirs noto-fonts ttf-dejavu \
@@ -43,7 +49,7 @@ pacstrap -K /mnt base linux linux-firmware btrfs-progs sudo nano vim networkmana
 
 genfstab -U /mnt >> /mnt/etc/fstab
 
-
+# ⚙️ Chroot конфігурація
 arch-chroot /mnt /bin/bash <<EOF
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 hwclock --systohc
@@ -71,11 +77,11 @@ useradd -m -G wheel -s /bin/zsh $USERNAME
 echo "$USERNAME:$PASSWORD" | chpasswd
 sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
 
-# LightDM
+# Сервіси
 systemctl enable lightdm
 systemctl enable NetworkManager
 EOF
 
-
+# 🧼 Завершення
 umount -R /mnt
-echo "✅ Installing end. Reboot!"
+echo "✅ Установка завершена! Перезавантажся!"
